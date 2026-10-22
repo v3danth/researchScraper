@@ -148,19 +148,8 @@ def run_spider(article_title, article_keyword, article_abstract, start_date, end
 
     start_date = start_date.split("/")
     end_date = end_date.split("/")
-    # output_path=f'PubMed_Output_{article_keyword}_{article_title}_{article_abstract}_{start_date[0]}_to_{end_date[0]}.csv'
-    # f=open(output_path,'w')
-    # output_path = f'PubMed_Output_{article_keyword}_{article_title}_{start_date[0]}_{start_date[1]}_{start_date[2]}_to_{end_date[0]}_{end_date[1]}_{end_date[2]}.csv'
-    output_path = file_name
     output.to_csv(file_name, mode="a", index=False)
 
-
-# def main(title, keyword, abstract, start_date, end_date):
-#     print("Article Title:", title)
-#     print("Article Keyword:", keyword)
-#     print("Article Abstract:", abstract)
-#     print("Start year:", start_date)
-#     print("End year:", end_date)
 
 if __name__ == "__main__":
     try:

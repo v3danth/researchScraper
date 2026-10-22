@@ -2,6 +2,9 @@ import logging
 
 import pandas as pd
 import scrapy
+from scrapy.crawler import CrawlerProcess
+from scrapy.utils.project import get_project_settings
+
 from app.europmc.constants_europmc import (
     ARTICLE_PER_PAGE,
     EMAIL_CHARACTER_DISALLOWED,
@@ -9,8 +12,6 @@ from app.europmc.constants_europmc import (
     HEADERS,
     OUTPUT_PATH_TEMPLATE,
 )
-from scrapy.crawler import CrawlerProcess
-from scrapy.utils.project import get_project_settings
 from app.europmc.ulits import contains_high_unicode, email_affiliation, process_email
 
 logging.basicConfig(

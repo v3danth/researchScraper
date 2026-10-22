@@ -1,78 +1,106 @@
 import os
 import smtplib
 import ssl
-import sys
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from config import Config
+
+# =========================
+# Core Email Logic
+# =========================
+
 
 def send_email_with_attachment(
-    subject, body, sender_email, receiver_email, password, file_path, max_attachment_size_mb=25
-):
+    subject: str, body: str, sender_email: str, receiver_email: str, password: str, file_path: str
+) -> bool:
+    """
+    Sends an email with an attachment.
+    If attachment exceeds max size, sends a download link instead.
+
+    Returns:
+        bool: True if email sent successfully, False otherwise
+    """
     try:
-        # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = receiver_email
         message["Subject"] = subject
-        message["Bcc"] = receiver_email  # Recommended for mass emails
+        DOWNLOAD_BASE_URL = Config.DOWNLOAD_BASE_URL
+        max_attachment_size_mb = Config.MAX_ATTACHMENT_MB
+        SMTP_SERVER = Config.SMTP_SERVER
+        SMTP_PORT = Config.SMTP_PORT
 
-        # Add body to the email
         message.attach(MIMEText(body, "plain"))
 
-        # Generate a unique filename for the attachment
-        attachment_filename = os.path.basename(file_path)
+        attachment_name = os.path.basename(file_path)
+        file_size_bytes = os.path.getsize(file_path)
 
-        # Check file size
-        file_size = os.path.getsize(file_path)  # in bytes
-        if file_size > max_attachment_size_mb * 1024 * 1024:
-            # File size exceeds the specified limit, send a link to the file on the server
-            body_25mb = f"\n\nAttachment: File size exceeds {max_attachment_size_mb} MB. Download it from the server: http://ec2-3-96-154-236.ca-central-1.compute.amazonaws.com/output/{attachment_filename}"
-            message.attach(MIMEText(body_25mb, "plain"))
+        if file_size_bytes > max_attachment_size_mb * 1024 * 1024:
+            download_link = f"{DOWNLOAD_BASE_URL}/{attachment_name}"
+            link_body = (
+                f"\n\nAttachment exceeds {max_attachment_size_mb} MB.\n"
+                f"Download it here:\n{download_link}"
+            )
+            message.attach(MIMEText(link_body, "plain"))
         else:
-            # Open the file in binary mode
-            with open(file_path, "rb") as attachment:
+            with open(file_path, "rb") as file:
                 part = MIMEBase("application", "octet-stream")
-                part.set_payload(attachment.read())
+                part.set_payload(file.read())
 
-            # Encode file in ASCII characters to send by email
             encoders.encode_base64(part)
-
-            # Add a header with the unique filename for the attachment
-            part.add_header("Content-Disposition", f"attachment; filename={attachment_filename}")
-
-            # Add the attachment to the message
+            part.add_header("Content-Disposition", f'attachment; filename="{attachment_name}"')
             message.attach(part)
 
-        # Convert the message to a string
-        text = message.as_string()
-
-        # Log in to the server using a secure context and send the email
         context = ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context) as server:
             server.login(sender_email, password)
-            server.sendmail(sender_email, receiver_email, text)
+            server.send_message(message)
 
-        print("Email sent successfully.")
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        return True
+
+    except Exception as exc:
+        print(f"[Mailer Error] {exc}")
+        return False
 
 
-if len(sys.argv) != 2:
-    print("Usage: python script.py <filename>")
-    sys.exit(1)
+# =========================
+# Public API (USED BY SCRAPER)
+# =========================
 
-# Example usage:
-subject = "Webscraping output file"
-body = """The scraping process has been completed. Please find the output file attached.
 
-attachment:
-"""
-sender_email = "connect.bankinglabs@gmail.com"
-receiver_email = "vedanthicloud@gmail.com"
-password = "acve ynep wrui tuvd"
-filename = sys.argv[1]  # Get the filename from the command-line argument
+def send_scrape_email(output_file: str) -> None:
+    """
+    Sends the scraping output via email.
+    This is the ONLY function other modules should call.
+    """
 
-send_email_with_attachment(subject, body, sender_email, receiver_email, password, filename)
+    sender_email = Config.sender_email
+    receiver_email = Config.receiver_email
+    password = Config.emaiL_password
+
+    if not all([sender_email, receiver_email, password]):
+        raise EnvironmentError(
+            "Email credentials not set. "
+            "Expected SCRAPER_EMAIL_SENDER, SCRAPER_EMAIL_RECEIVER, SCRAPER_EMAIL_PASSWORD"
+        )
+
+    subject = "Web Scraping Output File"
+    body = (
+        "The scraping process has completed successfully.\n\n"
+        "Please find the output file attached or linked below."
+    )
+
+    success = send_email_with_attachment(
+        subject=subject,
+        body=body,
+        sender_email=sender_email,
+        receiver_email=receiver_email,
+        password=password,
+        file_path=output_file,
+    )
+
+    if not success:
+        raise RuntimeError("Failed to send scraping email")

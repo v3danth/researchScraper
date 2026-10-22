@@ -1,12 +1,13 @@
 import os
 
 from flask import Flask
+from flask_compress import Compress
 
 from app.celery_utils import make_celery
 from config import Config, DevelopmentConfig, ProductionConfig, TestingConfig
 
 app = Flask(__name__)
-
+Compress(app)
 
 if Config.ENV == "development":
     app.config.from_object(DevelopmentConfig)
@@ -24,5 +25,6 @@ except OSError:
 
 # first import config and then call make_celery
 celery = make_celery(app)
-# TODO move it
-# from app.app_routes import main_routes
+from app.routes import main_routes
+
+app.register_blueprint(main_routes)

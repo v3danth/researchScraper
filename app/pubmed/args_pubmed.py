@@ -1,11 +1,11 @@
 import datetime
-import subprocess
 
-# import os
-# import shutil
+# from mailer import send_scrape_email
+# from pubmed_5 import run_spider
+# import subprocess TODO: add parallelism to run_spider
 
-# file_name = "/Users/vedanths/PycharmProjects/Bankinglabs/internship_1/scraping_server/main/Pubmed/Code/pubmed_5.py"
-file_name = "/var/www/html/main/Pubmed/Code/pubmed_5.py"
+from app.mailer import send_scrape_email
+from app.pubmed.pubmed_5 import run_spider
 
 
 def get_biweekly_dates(start_year, end_year):
@@ -26,72 +26,54 @@ def get_biweekly_dates(start_year, end_year):
     return biweekly_list
 
 
-def main():
-    mailer_flag = 0
+def get_daily_date_ranges(start_year, end_year):
+    ranges = []
+    for year in range(start_year, end_year + 1):
+        current = datetime.date(year, 1, 1)
+        end = datetime.date(year, 12, 31)
+
+        while current <= end:
+            ranges.append(
+                (
+                    current.strftime("%Y/%m/%d"),
+                    (current + datetime.timedelta(days=1)).strftime("%Y/%m/%d"),
+                )
+            )
+            current += datetime.timedelta(days=1)
+
+    return ranges
+
+def pubmed_main_scarper(keyword, title, abstract, start_year, end_year, mailer_flag=False):
+    output_path = f"PubMed_Output_{title}_{keyword}_{abstract}_{start_year}_{end_year}.csv"
+
+    # create empty file
+    open(output_path, "w").close()
+
+    for start_date, end_date in get_daily_date_ranges(start_year, end_year):
+        try:
+            run_spider(
+                article_title=title,
+                article_keyword=keyword,
+                article_abstract=abstract,
+                start_date=start_date,
+                end_date=end_date,
+                file_name=output_path,
+            )
+            print(f"Success: {start_date} - {end_date}")
+            mailer_flag = True
+
+        except Exception as e:
+            print(f"Failed: {start_date} - {end_date}")
+            print(e)
+
+    if mailer_flag:
+        send_scrape_email(output_path)
+
+
+if __name__ == "__main__":
     keyword = input("Article Keyword: ")
     title = input("Article Title: ")
     abstract = input("Article Abstract: ")
     start_year = int(input("Start year: "))
     end_year = int(input("End year: "))
-
-    output_path = f"/var/www/html/output/PubMed_Output_{title}_{keyword}_{abstract}_{start_year}_{end_year}.csv"
-    # output_path = f'/Users/vedanths/PycharmProjects/Bankinglabs/scraping_server/output/PubMed_Output_{title}_{keyword}_{abstract}_{start_year}_{end_year}.csv'
-    f = open(output_path, "+w")
-    f.close()
-
-    biweekly_list = get_biweekly_dates(start_year, end_year)
-
-    # Loop through the arguments and execute the file for each argument
-    for biweekly_date in biweekly_list:
-        try:
-            start_date, end_date = biweekly_date.split(" - ")
-            arguments = [
-                "python3",
-                file_name,
-                title,
-                keyword,
-                abstract,
-                start_date,
-                end_date,
-                output_path,
-            ]
-            process = subprocess.Popen(
-                arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-            )
-
-            try:
-                stdout, stderr = process.communicate(
-                    timeout=30
-                )  # Set the timeout value (in seconds)
-            except subprocess.TimeoutExpired:
-                process.terminate()  # Terminate the process if it exceeds the timeout
-                stdout, stderr = process.communicate()
-
-            exit_code = process.wait()
-
-            if exit_code != 0:
-                print(f"Error for argument: {biweekly_date}")
-                print("Standard Output:", stdout)
-                print("Standard Error:", stderr)
-            else:
-                print(f"Successfully executed for argument: {biweekly_date}")
-                mailer_flag = 1
-        except Exception as e:
-            print(f"An error occurred for argument: {biweekly_date}")
-            print(e)
-    if mailer_flag:
-        python_mailer = "/var/www/html/main/Mailer/mailer_4.py"
-        # python_mailer = "/Users/vedanths/PycharmProjects/Bankinglabs/scraping_server/main/Mailer/mailer_4.py"
-        try:
-            # Execute the Python file
-            subprocess.run(["python3", python_mailer, output_path])
-        except subprocess.CalledProcessError as e:
-            print(f"Error executing the Python file: {e}")
-        except FileNotFoundError as e:
-            print(f"Python interpreter not found: {e}")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-
-
-if __name__ == "__main__":
-    main()
+    pubmed_main_scarper(keyword, title, abstract, start_year, end_year)
